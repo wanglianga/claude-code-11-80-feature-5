@@ -14,7 +14,9 @@ echo "清空业务表..."
 PGPASSWORD=$DB_PASSWORD $PSQL -h "$DB_HOST" -U "$DB_USER" -d "$DB_NAME" -c \
   "TRUNCATE stream_definition, rule_package, checkpoint_manifest, state_proof,
             migration_plan, dual_track_run, dual_track_diff, switch_gate,
-            rollback_record, evidence_entry, stream_event RESTART IDENTITY CASCADE"
+            rollback_record, evidence_entry, stream_event,
+            outcome_ledger_entry, field_observation, intervention_record,
+            evaluation_run, release_gate RESTART IDENTITY CASCADE"
 
 echo "重启应用..."
 if [ -f /tmp/app.pid ] && kill -0 "$(cat /tmp/app.pid)" 2>/dev/null; then

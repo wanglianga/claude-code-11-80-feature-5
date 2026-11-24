@@ -57,7 +57,9 @@ public class StreamService {
                     String.valueOf(m.get("roadId")),
                     String.valueOf(m.get("pumpId")),
                     String.valueOf(m.get("reachId")),
-                    Boolean.TRUE.equals(m.get("key"))
+                    Boolean.TRUE.equals(m.get("key")),
+                    optionalText(m, "roadType", PartitionConfig.DEFAULT_ROAD_TYPE),
+                    optionalText(m, "basin", PartitionConfig.DEFAULT_BASIN)
             )).toList();
         } catch (ApiException e) {
             throw e;
@@ -71,5 +73,13 @@ public class StreamService {
                 .filter(p -> p.partitionNo() == partitionNo)
                 .findFirst()
                 .orElseThrow(() -> ApiException.notFound("流 " + def.getStreamCode() + " 无分区 " + partitionNo));
+    }
+
+    private static String optionalText(Map<String, Object> m, String key, String fallback) {
+        Object v = m.get(key);
+        if (v == null || String.valueOf(v).isBlank() || "null".equals(String.valueOf(v))) {
+            return fallback;
+        }
+        return String.valueOf(v);
     }
 }

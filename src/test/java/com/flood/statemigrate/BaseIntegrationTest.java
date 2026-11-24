@@ -21,11 +21,21 @@ abstract class BaseIntegrationTest {
     @Autowired protected SwitchGateRepo gateRepo;
     @Autowired protected RollbackRecordRepo rollbackRepo;
     @Autowired protected EvidenceEntryRepo evidenceRepo;
+    @Autowired protected OutcomeLedgerRepo outcomeLedgerRepo;
+    @Autowired protected FieldObservationRepo observationRepo;
+    @Autowired protected InterventionRecordRepo interventionRepo;
+    @Autowired protected EvaluationRunRepo evaluationRunRepo;
+    @Autowired protected ReleaseGateRepo releaseGateRepo;
 
     protected ScenarioBuilder scenario;
 
     @BeforeEach
     void cleanDb() {
+        releaseGateRepo.deleteAll();
+        evaluationRunRepo.deleteAll();
+        interventionRepo.deleteAll();
+        observationRepo.deleteAll();
+        outcomeLedgerRepo.deleteAll();
         diffRepo.deleteAll();
         runRepo.deleteAll();
         evidenceRepo.deleteAll();

@@ -86,5 +86,38 @@ step "12. 证据账分类统计（旧输出/新候选/新输出/已撤回）"
 req "$BASE/api/streams/$SID/evidence" | jq 'group_by(.kind) | map({kind: .[0].kind, count: length})'
 req "$BASE/api/streams/$SID" | jq '{status, stateSchema, rulePackageVersion}'
 
+step "13. 预警结果账：冻结条目 + 暴露拆分（规则升级跨越同一积水事件）"
+req "$BASE/api/streams/$SID/outcome-ledger" | jq -c '.[] | {roadId, riskLevel, exposureGroup, exposureSplit}'
+req "$BASE/api/streams/$SID/outcome-ledger/exposure" | jq '{crossSplitGroups: [.groups[] | select(.crossEventSplit) | .exposureGroup]}'
+
+step "14. 结果覆盖与标签状态：受干预/延迟/未观察分类"
+COV=$(req "$BASE/api/streams/$SID/outcome-coverage")
+echo "$COV" | jq '{entries, byObservabilityClass, unidentifiableShare, coverageSelectionBias}'
+
+step "15. 校准评估（删失干预路线）：等级命中/提前量/校准区间/右删失范围"
+EVAL=$(req -X POST "$BASE/api/streams/$SID/evaluations" -d '{"route":"CENSORED_INTERVENTION"}')
+echo "$EVAL" | jq '{ledgerSize, strictSampleSize, censoredSampleSize, unobservableCount, rightCensoredCount, interventionAffectedCount, unidentifiableShare, rightCensoredRange}'
+echo "$EVAL" | jq '.overall | {scored, levelHits, levelHitRate, truePositives, falsePositives, leadTimeAvgMinutes, sensitivityHitLower, sensitivityHitUpper}'
+echo "$EVAL" | jq '[.strata[] | {basin, roadType, observationStatus, scored, levelHitRate}]'
+echo "$EVAL" | jq '.notes'
+
+step "16. 严格评估（仅独立核验水深）"
+req -X POST "$BASE/api/streams/$SID/evaluations" -d '{"route":"STRICT_VERIFIED"}' \
+  | jq '{route, strictSampleSize, unidentifiableShare}'
+
+step "16b. 迟到视频标签：按当时（asOf=2天前，视频尚未到达）保留右删失版本"
+EVAL_THEN=$(req -X POST "$BASE/api/streams/$SID/evaluations" -d "{\"route\":\"CENSORED_INTERVENTION\",\"asOf\":\"$(date -u -d '2 days ago' +%Y-%m-%dT%H:%M:%SZ)\"}")
+echo "$EVAL_THEN" | jq '{asOf, rightCensoredCount, rightCensoredRange, evaluationRunId}'
+THEN_RUN=$(echo "$EVAL_THEN" | jq -r '.evaluationRunId')
+echo "$EVAL_THEN" | jq -e '.rightCensoredCount >= 1' >/dev/null && echo "当时版本：视频标签按右删失处理（当时不可识别）"
+step "16c. 视频到达后重评：按事件时间纳入，并溯源到当时右删失版本"
+req -X POST "$BASE/api/streams/$SID/evaluations" -d "{\"route\":\"CENSORED_INTERVENTION\",\"replayOfRunId\":$THEN_RUN}" \
+  | jq '{asOf, replayOfRunId, rightCensoredCount, censoredSampleSize}'
+
+step "17. 上线门禁：覆盖选择偏差阻止全流域结论，否则按覆盖+安全下限放行"
+GATE=$(req -X POST "$BASE/api/streams/$SID/release-gates" -d '{"minCoverage":0.25,"minStrictSamples":1,"safetyFloor":0.5}')
+echo "$GATE" | jq '{decision, measuredCoverage, strictSamples, measuredSafety, coverageBias, allowedRoadIds, blockedRoadIds, reasons}'
+echo "$GATE" | jq -e '.coverageBias == true' >/dev/null && echo "覆盖选择偏差已标记（B-SOUTH 仅低风险 R-004 核验）"
+
 echo
 echo "SMOKE_OK"
